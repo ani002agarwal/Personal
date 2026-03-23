@@ -1,1 +1,126 @@
-
+name: Monorepo CI/CD (Matrix)
+ 
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "A/**"
+      - "B/**"
+      - "C/**"
+ 
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+ 
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+ 
+      - name: Detect changed projects
+        id: set-matrix
+        shell: bash
+        run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔍 CHANGE DETECTION STARTED"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+ 
+          # Handle first commit case
+          if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            echo "🆕 First commit detected"
+            changed=$(git ls-files)
+          else
+            changed=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+          fi
+ 
+          echo ""
+          echo "📂 Changed files:"
+          echo "-----------------"
+          echo "$changed"
+          echo ""
+ 
+          projects=()
+ 
+          if echo "$changed" | grep -q '^A/'; then
+            echo "✅ Project A affected"
+            projects+=('{"name":"A"}')
+          fi
+ 
+          if echo "$changed" | grep -q '^B/'; then
+            echo "✅ Project B affected"
+            projects+=('{"name":"B"}')
+          fi
+ 
+          if echo "$changed" | grep -q '^C/'; then
+            echo "✅ Project C affected"
+            projects+=('{"name":"C"}')
+          fi
+ 
+          matrix=$(printf '%s\n' "${projects[@]}" | jq -c -s .)
+ 
+          echo ""
+          echo "🧩 Generated matrix:"
+          echo "$matrix"
+          echo ""
+ 
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+ 
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ CHANGE DETECTION COMPLETED"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+ 
+  ci-cd:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.matrix != '[]'
+    runs-on: ubuntu-latest
+ 
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+ 
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+ 
+      - name: Build and deploy changed project
+        shell: bash
+        run: |
+          PROJECT="${{ matrix.project.name }}"
+ 
+          echo ""
+          echo "🚀━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📦 PROJECT: $PROJECT"
+          echo "🚀━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ Changes detected"
+          echo ""
+ 
+          echo "🔧 Building project..."
+          echo "---------------------------------"
+          cd "$PROJECT"
+ 
+          # ✅ Add real build commands below
+          # Example:
+          # npm install
+          # npm run build
+ 
+          echo "✅ Build completed"
+          echo ""
+ 
+          echo "🚚 Deploying project..."
+          echo "---------------------------------"
+ 
+          # ✅ Add real deployment commands below
+          # Example:
+          # ./deploy.sh
+ 
+          echo "✅ Deployment successful"
+          echo ""
+          echo "🎉 PROJECT $PROJECT PIPELINE FINISHED"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+ 
